@@ -16,7 +16,7 @@ window.APPS_DATA = [
       "PDF-ready templates for direct AI upload",
       "Category cheat sheets with minimum required inputs per task"
     ],
-    downloadUrl: "",
+    downloadUrl: "downloads/jobboost-prompt-kit.zip",
     demoUrl: "",
     githubUrl: "",
     updated: "2026-03-15"
@@ -34,7 +34,7 @@ window.APPS_DATA = [
       "One-click systemctl stop → upload → start workflow",
       "Saves connection profiles locally"
     ],
-    downloadUrl: "downloads/jobboost-prompt-kit.zip",
+    downloadUrl: "",
     demoUrl: "",
     githubUrl: "",
     updated: "2026-03-15"
