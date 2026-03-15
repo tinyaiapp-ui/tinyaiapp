@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Oscar Pick Pay • 2025 (97th Academy Awards)</title>
+  <title>Oscar Picks • 2025 (97th Academy Awards)</title>
   <style>
     :root{
       --bg:#0a0b10;
@@ -47,28 +47,27 @@
 <body>
   <div class="wrap">
     <section class="hero">
-      <h1>🎬 Oscar Pick Pay 2025</h1>
-      <p class="sub">Odaberi kategoriju + nominaciju i pošalji <strong>1 token</strong> po kliku. Za veći iznos ponovi uplatu više puta.</p>
+      <h1>🎬 Oscar Picks 2025</h1>
+      <p class="sub">Pick a category + nominee and send approximately <strong>€1 worth</strong> of the token per entry.</p>
       <div style="margin-top:14px;display:flex;justify-content:center;">
         <img src="./assets/oscar-banner.png" alt="Oscar visual" style="max-width:100%;width:min(640px,100%);border-radius:14px;border:1px solid var(--line);box-shadow:0 8px 30px rgba(0,0,0,.35);" />
       </div>
-      <p class="hint">Svaki QR ima oznaku tipa <code>OSCAR_2025|kategorija|nominacija</code>.</p>
+      <p class="hint" id="rateInfo">Each QR includes a memo tag like <code>OSCAR_2025|CATEGORY|NOMINEE</code>. Loading live token price…</p>
     </section>
 
     <div class="sticky">
-      <strong>Iznos po uplati:</strong> <span class="chip">1 token</span>
-      <span class="chip">Ponovi skeniranje za više uplata</span>
-      <span class="chip">Ne slati s burze (CEX)</span>
+      <strong>Amount per entry:</strong> <span class="chip" id="amountChip">~ €1 in token</span>
+      <span class="chip">Repeat payment for multiple entries</span>
+      <span class="chip">Do not send from a CEX account</span>
     </div>
 
     <div id="app" class="grid"></div>
 
-    <p class="footer">Podaci: 97th Academy Awards (2025).</p>
+    <p class="footer">Data set: 97th Academy Awards (2025).</p>
   </div>
 
   <script>
-    // Javna stranica: bez admin inputa i bez prikaza tehničkih podataka.
-    // Ako trebaš promijeniti wallet/mint, promijeni ove dvije linije i pushaj ponovno.
+    // Public page without admin fields.
     const RECIPIENT_WALLET = '8mLuYNT2FFx1cBhGPhDL6ddhg7C93r4VrJziBm6aEdmJ';
     const TOKEN_MINT = '7dMm1kkytxMqZZHMk4pzUT3GqsrkFJEoz2w9uYH4pump';
 
@@ -99,6 +98,10 @@
     ];
 
     const app = document.getElementById('app');
+    const amountChip = document.getElementById('amountChip');
+    const rateInfo = document.getElementById('rateInfo');
+
+    let tokenAmount = 1;
 
     function slug(s){
       return s.normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9]+/g,'_').replace(/^_|_$/g,'').toUpperCase();
@@ -108,13 +111,46 @@
       return `OSCAR_2025|${slug(category)}|${slug(nominee)}`;
     }
 
+    function formatTokenAmount(v){
+      if(v >= 1000) return Math.round(v).toString();
+      if(v >= 100) return v.toFixed(1);
+      if(v >= 1) return v.toFixed(2);
+      return v.toFixed(4);
+    }
+
+    async function loadEurBasedAmount(){
+      try {
+        const dexRes = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${TOKEN_MINT}`);
+        const dex = await dexRes.json();
+        const pairs = Array.isArray(dex?.pairs) ? dex.pairs.filter(p => Number(p.priceUsd) > 0) : [];
+        if(!pairs.length) throw new Error('No DEX pairs found');
+
+        pairs.sort((a,b) => (Number(b?.liquidity?.usd || 0) - Number(a?.liquidity?.usd || 0)));
+        const bestPair = pairs[0];
+        const tokenUsd = Number(bestPair.priceUsd);
+
+        const fxRes = await fetch('https://api.frankfurter.app/latest?from=EUR&to=USD');
+        const fx = await fxRes.json();
+        const eurUsd = Number(fx?.rates?.USD);
+        if(!tokenUsd || !eurUsd) throw new Error('Invalid pricing data');
+
+        tokenAmount = eurUsd / tokenUsd;
+        amountChip.textContent = `~ €1 = ${formatTokenAmount(tokenAmount)} token`;
+        rateInfo.innerHTML = `Each QR includes memo tag <code>OSCAR_2025|CATEGORY|NOMINEE</code>. Live estimate uses DEX price (pair: ${bestPair?.dexId || 'solana'}).`;
+      } catch (e) {
+        tokenAmount = 1;
+        amountChip.textContent = '~ fallback: 1 token';
+        rateInfo.innerHTML = 'Could not fetch live DEX price right now, so QR uses 1 token fallback.';
+      }
+    }
+
     function buildSolanaPay(recipient, mint, category, nominee){
       const memo = memoFor(category, nominee);
       const url = new URL(`solana:${recipient}`);
-      url.searchParams.set('amount','1');
-      if(mint && !mint.startsWith('REPLACE_')) url.searchParams.set('spl-token', mint);
+      url.searchParams.set('amount', String(Number(tokenAmount.toFixed(6))));
+      if(mint) url.searchParams.set('spl-token', mint);
       url.searchParams.set('label', 'Oscar Pick 2025');
-      url.searchParams.set('message', `${category} → ${nominee} (1 token)`);
+      url.searchParams.set('message', `${category} → ${nominee} (~€1)`);
       url.searchParams.set('memo', memo);
       return url.toString();
     }
@@ -129,7 +165,7 @@
     }
 
     function render(){
-      const hasAddress = RECIPIENT_WALLET && !RECIPIENT_WALLET.startsWith('REPLACE_') && RECIPIENT_WALLET.length > 20;
+      const hasAddress = RECIPIENT_WALLET && RECIPIENT_WALLET.length > 20;
       app.innerHTML = '';
 
       categories.forEach(cat => {
@@ -147,13 +183,13 @@
             <div>
               <div class="title">${nom}</div>
               <div class="meta">${cat.name}</div>
-              <span class="tag">1 token po uplati</span>
+              <span class="tag">~€1 in token per entry</span>
             </div>
             <div class="qr">
               ${hasAddress
                 ? `<img src="${qrUrl}" alt="QR ${nom}">
                    <div class="qr-actions"><button class="copy-link" data-link="${encodeURIComponent(payUrl)}">Copy pay link</button></div>`
-                : `<div class="meta">Admin još nije postavio wallet/mint u kodu.</div>`}
+                : `<div class="meta">Wallet/token are not configured yet.</div>`}
             </div>`;
           box.appendChild(row);
         });
@@ -174,7 +210,10 @@
       });
     }
 
-    render();
+    (async () => {
+      await loadEurBasedAmount();
+      render();
+    })();
   </script>
 </body>
 </html>
