@@ -52,7 +52,7 @@
       <div style="margin-top:14px;display:flex;justify-content:center;">
         <img src="./assets/oscar-banner.png" alt="Oscar visual" style="max-width:100%;width:min(640px,100%);border-radius:14px;border:1px solid var(--line);box-shadow:0 8px 30px rgba(0,0,0,.35);" />
       </div>
-      <p class="hint" id="rateInfo">Each QR includes a memo tag like <code>OSCAR_2025|CATEGORY|NOMINEE</code>. Loading live token price…</p>
+      <p class="hint" id="rateInfo">Each QR includes a memo tag like <code>OSCAR_2026|CATEGORY|NOMINEE</code>. Loading live token price…</p>
     </section>
 
     <div class="sticky">
@@ -70,6 +70,10 @@
     // Public page without admin fields.
     const RECIPIENT_WALLET = '8mLuYNT2FFx1cBhGPhDL6ddhg7C93r4VrJziBm6aEdmJ';
     const TOKEN_MINT = '7dMm1kkytxMqZZHMk4pzUT3GqsrkFJEoz2w9uYH4pump';
+
+    // Mark categories as closed here after they are announced.
+    // Example: ['Best Supporting Actress', 'Best Original Score']
+    const CLOSED_CATEGORIES = [];
 
     const categories = [
       {name:'Best Picture', nominees:['Bugonia','F1','Frankenstein','Hamnet','Marty Supreme','One Battle After Another','The Secret Agent','Sentimental Value','Sinners','Train Dreams']},
@@ -167,30 +171,35 @@
 
     function render(){
       const hasAddress = RECIPIENT_WALLET && RECIPIENT_WALLET.length > 20;
+      const closedSet = new Set(CLOSED_CATEGORIES);
       app.innerHTML = '';
 
       categories.forEach(cat => {
         const box = document.createElement('section');
         box.className = 'cat';
-        box.innerHTML = `<h2>${cat.name}</h2>`;
+        const isClosed = closedSet.has(cat.name);
+        box.innerHTML = `<h2>${cat.name}${isClosed ? ' • CLOSED' : ''}</h2>`;
 
         cat.nominees.forEach(nom => {
           const row = document.createElement('div');
           row.className = 'nom';
-          const payUrl = hasAddress ? buildSolanaPay(RECIPIENT_WALLET, TOKEN_MINT, cat.name, nom) : '';
-          const qrUrl = hasAddress ? `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(payUrl)}` : '';
+          const canPay = hasAddress && !isClosed;
+          const payUrl = canPay ? buildSolanaPay(RECIPIENT_WALLET, TOKEN_MINT, cat.name, nom) : '';
+          const qrUrl = canPay ? `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(payUrl)}` : '';
 
           row.innerHTML = `
             <div>
               <div class="title">${nom}</div>
               <div class="meta">${cat.name}</div>
-              <span class="tag">~€1 in token per entry</span>
+              <span class="tag">${isClosed ? 'Category closed' : '~€1 in token per entry'}</span>
             </div>
             <div class="qr">
-              ${hasAddress
-                ? `<img src="${qrUrl}" alt="QR ${nom}">
-                   <div class="qr-actions"><button class="copy-link" data-link="${encodeURIComponent(payUrl)}">Copy pay link</button></div>`
-                : `<div class="meta">Wallet/token are not configured yet.</div>`}
+              ${isClosed
+                ? `<div class="meta">Voting closed for this category.</div>`
+                : (hasAddress
+                    ? `<img src="${qrUrl}" alt="QR ${nom}">
+                       <div class="qr-actions"><button class="copy-link" data-link="${encodeURIComponent(payUrl)}">Copy pay link</button></div>`
+                    : `<div class="meta">Wallet/token are not configured yet.</div>`)}
             </div>`;
           box.appendChild(row);
         });
