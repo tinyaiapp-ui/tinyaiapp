@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="hr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Oscar Pick Pay • 2025 (97th Academy Awards)</title>
+  <style>
+    :root{
+      --bg:#0a0b10;
+      --panel:#131726;
+      --panel-2:#1a2033;
+      --text:#eef1ff;
+      --muted:#a7b0d6;
+      --gold:#f5c35e;
+      --line:#2a3350;
+      --ok:#52d29a;
+      --btn:#263053;
+      --btn-hover:#32406f;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+      background:radial-gradient(1200px 800px at 20% -10%, #1c2340 0%, var(--bg) 50%) no-repeat, var(--bg);
+      color:var(--text);
+      line-height:1.45;
+    }
+    .wrap{max-width:1200px;margin:0 auto;padding:28px 16px 80px}
+    .hero{
+      background:linear-gradient(145deg, #1a2036, #0f1322);
+      border:1px solid var(--line);
+      border-radius:18px;
+      padding:22px;
+      box-shadow:0 12px 40px rgba(0,0,0,.35);
+      margin-bottom:18px;
+    }
+    h1{margin:0 0 8px;font-size:clamp(1.3rem,2vw,2rem)}
+    .sub{color:var(--muted);margin:0}
+    .cfg{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}
+    .cfg label{font-size:.9rem;color:var(--muted);display:block;margin-bottom:6px}
+    .cfg input{
+      width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--line);
+      background:var(--panel);color:var(--text)
+    }
+    .hint{font-size:.85rem;color:var(--muted);margin-top:8px}
+    .tools{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+    .sticky{
+      position:sticky;top:0;z-index:5;background:rgba(10,11,16,.85);backdrop-filter: blur(8px);
+      border:1px solid var(--line);border-radius:14px;padding:12px;margin:18px 0;
+      display:flex;gap:8px;flex-wrap:wrap;align-items:center
+    }
+    .sticky strong{color:var(--gold)}
+    .chip{padding:6px 10px;border:1px solid var(--line);border-radius:999px;background:#111629;color:var(--muted);font-size:.82rem}
+    .grid{display:grid;gap:14px}
+    .cat{
+      border:1px solid var(--line);border-radius:14px;background:linear-gradient(180deg,var(--panel),#101424);
+      overflow:hidden
+    }
+    .cat h2{margin:0;padding:12px 14px;background:var(--panel-2);font-size:1rem;color:var(--gold);border-bottom:1px solid var(--line)}
+    .nom{display:grid;grid-template-columns:1fr 260px;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line)}
+    .nom:last-child{border-bottom:none}
+    .title{font-weight:700}
+    .meta{color:var(--muted);font-size:.9rem}
+    .tag{display:inline-block;font-size:.76rem;padding:3px 8px;border:1px solid var(--line);border-radius:999px;color:var(--ok);margin-top:6px}
+    .qr img{width:96px;height:96px;border-radius:8px;background:#fff;padding:4px}
+    .pay-url{font-size:.72rem;word-break:break-all;color:#9db4ff;margin-top:6px}
+    .qr-actions{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+    button{
+      appearance:none;border:1px solid var(--line);background:var(--btn);color:var(--text);
+      border-radius:8px;padding:7px 10px;font-size:.8rem;cursor:pointer
+    }
+    button:hover{background:var(--btn-hover)}
+    button.success{border-color:#2f7f5a;color:#c7f8e2;background:#1c3b2f}
+    .footer{margin-top:24px;color:var(--muted);font-size:.85rem}
+    @media (max-width:700px){
+      .cfg{grid-template-columns:1fr}
+      .nom{grid-template-columns:1fr}
+      .qr{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="hero">
+      <h1>🎬 Oscar Pick Pay 2025</h1>
+      <p class="sub">Odaberi kategoriju + nominaciju i pošalji <strong>1 token</strong> po kliku. Za veći iznos — ponovi uplatu više puta.</p>
+      <div class="cfg">
+        <div>
+          <label for="wallet">Tvoj Solana wallet (primatelj)</label>
+          <input id="wallet" placeholder="Npr. 9xQeWvG816bUx9EPjHmaT23yvVMJQ6oS8pfhBjkP2Z5k" />
+        </div>
+        <div>
+          <label for="mint">Token mint adresa (pump.fun token)</label>
+          <input id="mint" placeholder="Npr. So11111111111111111111111111111111111111112" />
+        </div>
+      </div>
+      <div style="margin-top:14px;display:flex;justify-content:center;">
+        <img src="./assets/oscar-banner.png" alt="Oscar visual" style="max-width:100%;width:min(640px,100%);border-radius:14px;border:1px solid var(--line);box-shadow:0 8px 30px rgba(0,0,0,.35);" />
+      </div>
+      <p class="hint">QR se automatski generira kao Solana Pay link s memo oznakom: <code>OSCAR_2025|kategorija|nominacija</code>.</p>
+      <div class="tools">
+        <button id="downloadSetupCsv">⬇ Download setup CSV (kategorije + memo + pay link)</button>
+        <button id="downloadPayoutCsv">⬇ Download payout template CSV</button>
+      </div>
+    </section>
+
+    <div class="sticky">
+      <strong>Iznos po uplati:</strong> <span class="chip">1 token</span>
+      <span class="chip">Ponovi skeniranje za više uplata</span>
+      <span class="chip">Ne slati s burze (CEX)</span>
+    </div>
+
+    <div id="app" class="grid"></div>
+
+    <p class="footer">
+      Podaci: 97th Academy Awards (2025). Prije objave provjeri finalnu listu nominacija.
+    </p>
+  </div>
+
+  <script>
+    const categories = [
+      {name:'Best Picture', nominees:['Anora','The Brutalist','A Complete Unknown','Conclave','Dune: Part Two','Emilia Pérez','I\'m Still Here','Nickel Boys','The Substance','Wicked']},
+      {name:'Best Director', nominees:['Sean Baker — Anora','Brady Corbet — The Brutalist','James Mangold — A Complete Unknown','Jacques Audiard — Emilia Pérez','Coralie Fargeat — The Substance']},
+      {name:'Best Actor', nominees:['Adrien Brody — The Brutalist','Timothée Chalamet — A Complete Unknown','Colman Domingo — Sing Sing','Ralph Fiennes — Conclave','Sebastian Stan — The Apprentice']},
+      {name:'Best Actress', nominees:['Mikey Madison — Anora','Cynthia Erivo — Wicked','Karla Sofía Gascón — Emilia Pérez','Demi Moore — The Substance','Fernanda Torres — I\'m Still Here']},
+      {name:'Best Supporting Actor', nominees:['Kieran Culkin — A Real Pain','Yura Borisov — Anora','Edward Norton — A Complete Unknown','Guy Pearce — The Brutalist','Jeremy Strong — The Apprentice']},
+      {name:'Best Supporting Actress', nominees:['Zoe Saldaña — Emilia Pérez','Monica Barbaro — A Complete Unknown','Ariana Grande — Wicked','Felicity Jones — The Brutalist','Isabella Rossellini — Conclave']},
+      {name:'Best Original Screenplay', nominees:['Anora','The Brutalist','A Real Pain','September 5','The Substance']},
+      {name:'Best Adapted Screenplay', nominees:['Conclave','A Complete Unknown','Emilia Pérez','Nickel Boys','Sing Sing']},
+      {name:'Best Animated Feature', nominees:['Flow','Inside Out 2','Memoir of a Snail','Wallace & Gromit: Vengeance Most Fowl','The Wild Robot']},
+      {name:'Best International Feature Film', nominees:['I\'m Still Here (Brazil)','Emilia Pérez (France)','Flow (Latvia)','The Girl with the Needle (Denmark)','The Seed of the Sacred Fig (Germany)']},
+      {name:'Best Documentary Feature', nominees:['No Other Land','Black Box Diaries','Porcelain War','Soundtrack to a Coup d\'Etat','Sugarcane']},
+      {name:'Best Documentary Short', nominees:['The Only Girl in the Orchestra','Death by Numbers','I Am Ready, Warden','Incident','Instruments of a Beating Heart']},
+      {name:'Best Live Action Short', nominees:['I\'m Not a Robot','A Lien','Anuja','The Last Ranger','The Man Who Could Not Remain Silent']},
+      {name:'Best Animated Short', nominees:['In the Shadow of the Cypress','Beautiful Men','Magic Candies','Wander to Wonder','Yuck!']},
+      {name:'Best Original Score', nominees:['The Brutalist','Conclave','Emilia Pérez','Wicked','The Wild Robot']},
+      {name:'Best Original Song', nominees:['El Mal — Emilia Pérez','The Journey — The Six Triple Eight','Like a Bird — Sing Sing','Mi camino — Emilia Pérez','Never Too Late — Elton John: Never Too Late']},
+      {name:'Best Sound', nominees:['Dune: Part Two','A Complete Unknown','Emilia Pérez','Wicked','The Wild Robot']},
+      {name:'Best Production Design', nominees:['Wicked','The Brutalist','Conclave','Dune: Part Two','Nosferatu']},
+      {name:'Best Cinematography', nominees:['The Brutalist','Dune: Part Two','Emilia Pérez','Maria','Nosferatu']},
+      {name:'Best Makeup and Hairstyling', nominees:['The Substance','A Different Man','Emilia Pérez','Nosferatu','Wicked']},
+      {name:'Best Costume Design', nominees:['Wicked','A Complete Unknown','Conclave','Gladiator II','Nosferatu']},
+      {name:'Best Film Editing', nominees:['Anora','The Brutalist','Conclave','Emilia Pérez','Wicked']},
+      {name:'Best Visual Effects', nominees:['Dune: Part Two','Alien: Romulus','Better Man','Kingdom of the Planet of the Apes','Wicked']}
+    ];
+
+    const walletInput = document.getElementById('wallet');
+    const mintInput = document.getElementById('mint');
+    const app = document.getElementById('app');
+    const downloadSetupCsvBtn = document.getElementById('downloadSetupCsv');
+    const downloadPayoutCsvBtn = document.getElementById('downloadPayoutCsv');
+
+    const storageKeys = { wallet:'oscars_wallet', mint:'oscars_mint' };
+    walletInput.value = localStorage.getItem(storageKeys.wallet) || '';
+    mintInput.value = localStorage.getItem(storageKeys.mint) || '';
+
+    function slug(s){
+      return s.normalize('NFKD').replace(/[\u0300-\u036f]/g,'')
+        .replace(/[^a-zA-Z0-9]+/g,'_').replace(/^_|_$/g,'').toUpperCase();
+    }
+
+    function memoFor(category, nominee){
+      return `OSCAR_2025|${slug(category)}|${slug(nominee)}`;
+    }
+
+    function buildSolanaPay(recipient, mint, category, nominee){
+      const memo = memoFor(category, nominee);
+      const label = 'Oscar Pick 2025';
+      const message = `${category} → ${nominee} (1 token)`;
+      const url = new URL(`solana:${recipient}`);
+      url.searchParams.set('amount','1');
+      if(mint) url.searchParams.set('spl-token', mint);
+      url.searchParams.set('label', label);
+      url.searchParams.set('message', message);
+      url.searchParams.set('memo', memo);
+      return url.toString();
+    }
+
+    async function copyToClipboard(text){
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        return ok;
+      }
+    }
+
+    function csvEscape(value){
+      const str = String(value ?? '');
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+
+    function downloadCsv(filename, rows){
+      const csvText = rows.map(row => row.map(csvEscape).join(',')).join('\n');
+      const blob = new Blob([csvText], { type:'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(link.href);
+    }
+
+    function buildSetupRows(){
+      const recipient = walletInput.value.trim();
+      const mint = mintInput.value.trim();
+      const rows = [[
+        'category','nominee','memo','recipient_wallet','token_mint','amount_token','solana_pay_url'
+      ]];
+
+      categories.forEach(cat => {
+        cat.nominees.forEach(nom => {
+          rows.push([
+            cat.name,
+            nom,
+            memoFor(cat.name, nom),
+            recipient,
+            mint,
+            '1',
+            recipient.length > 20 ? buildSolanaPay(recipient, mint, cat.name, nom) : ''
+          ]);
+        });
+      });
+      return rows;
+    }
+
+    function buildPayoutTemplateRows(){
+      const rows = [[
+        'sender_wallet','sender_token_account','tx_signature','category','nominee','memo','amount_received','winner_yes_no','refund_amount','payout_amount','status','note'
+      ]];
+      rows.push([
+        'ExampleWallet1111111111111111111111111111111111',
+        'ExampleATA111111111111111111111111111111111111',
+        '5rF...example',
+        'Best Picture',
+        'Anora',
+        'OSCAR_2025|BEST_PICTURE|ANORA',
+        '1',
+        'yes',
+        '0',
+        '2',
+        'pending',
+        'ručno provjeri prije slanja'
+      ]);
+      return rows;
+    }
+
+    function render(){
+      const recipient = walletInput.value.trim();
+      const mint = mintInput.value.trim();
+      app.innerHTML = '';
+
+      categories.forEach(cat => {
+        const box = document.createElement('section');
+        box.className = 'cat';
+        box.innerHTML = `<h2>${cat.name}</h2>`;
+
+        cat.nominees.forEach(nom => {
+          const row = document.createElement('div');
+          row.className = 'nom';
+          const hasAddress = recipient.length > 20;
+          const payUrl = hasAddress ? buildSolanaPay(recipient, mint, cat.name, nom) : '';
+          const qrUrl = hasAddress
+            ? `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(payUrl)}`
+            : '';
+
+          row.innerHTML = `
+            <div>
+              <div class="title">${nom}</div>
+              <div class="meta">${cat.name}</div>
+              <span class="tag">1 token po uplati</span>
+            </div>
+            <div class="qr">
+              ${hasAddress
+                ? `
+                    <img src="${qrUrl}" alt="QR ${nom}">
+                    <div class="pay-url">${payUrl}</div>
+                    <div class="qr-actions">
+                      <button class="copy-link" data-link="${encodeURIComponent(payUrl)}">Copy pay link</button>
+                      <button class="copy-memo" data-memo="${memoFor(cat.name, nom)}">Copy memo</button>
+                    </div>
+                  `
+                : `<div class="meta">Unesi wallet gore da se prikažu QR kodovi.</div>`}
+            </div>
+          `;
+          box.appendChild(row);
+        });
+
+        app.appendChild(box);
+      });
+
+      app.querySelectorAll('.copy-link').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const link = decodeURIComponent(btn.dataset.link || '');
+          const ok = await copyToClipboard(link);
+          if(ok){
+            btn.textContent = 'Copied!';
+            btn.classList.add('success');
+            setTimeout(() => { btn.textContent = 'Copy pay link'; btn.classList.remove('success'); }, 1200);
+          }
+        });
+      });
+
+      app.querySelectorAll('.copy-memo').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const memo = btn.dataset.memo || '';
+          const ok = await copyToClipboard(memo);
+          if(ok){
+            btn.textContent = 'Copied!';
+            btn.classList.add('success');
+            setTimeout(() => { btn.textContent = 'Copy memo'; btn.classList.remove('success'); }, 1200);
+          }
+        });
+      });
+    }
+
+    function persistAndRender(){
+      localStorage.setItem(storageKeys.wallet, walletInput.value.trim());
+      localStorage.setItem(storageKeys.mint, mintInput.value.trim());
+      render();
+    }
+
+    downloadSetupCsvBtn.addEventListener('click', () => {
+      const rows = buildSetupRows();
+      downloadCsv('oscars-2025-setup-links.csv', rows);
+    });
+
+    downloadPayoutCsvBtn.addEventListener('click', () => {
+      const rows = buildPayoutTemplateRows();
+      downloadCsv('oscars-2025-payout-template.csv', rows);
+    });
+
+    walletInput.addEventListener('input', persistAndRender);
+    mintInput.addEventListener('input', persistAndRender);
+    render();
+  </script>
+</body>
+</html>
