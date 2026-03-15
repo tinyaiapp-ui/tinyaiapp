@@ -18,7 +18,7 @@ window.APPS_DATA = [
     ],
     downloadUrl: "downloads/jobboost-prompt-kit.zip",
     demoUrl: "",
-    githubUrl: "",
+    githubUrl: "https://github.com/tinyaiapp-ui/tinyaiapp/tree/main/APP/120%20promts",
     updated: "2026-03-15"
   },
   {
