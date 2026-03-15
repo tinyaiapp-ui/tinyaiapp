@@ -1,0 +1,16 @@
+{
+  "profile_name": "Backup",
+  "host": "46.225.18.108",
+  "port": "22",
+  "username": "root",
+  "local_root": "C:/Users/Korisnik/Documents/GitHub/toramav",
+  "remote_root": "/home/toranam",
+  "service_name": "webapp",
+  "test_url": "http://46.225.18.108:8000/",
+  "remember_passwords": true,
+  "auto_open_url": true,
+  "stop_start_service": true,
+  "ignore_names": ".git,__pycache__,.venv,venv,node_modules,.idea,.vscode,dist,build,htmlcov,.pytest_cache,.mypy_cache,.next,.nuxt,out,target,coverage,.cache",
+  "password": "papretiapo",
+  "sudo_password": ""
+}

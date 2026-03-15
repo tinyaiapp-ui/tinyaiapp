@@ -1,0 +1,16 @@
+{
+  "profile_name": "tomi",
+  "host": "",
+  "port": "",
+  "username": "",
+  "local_root": "",
+  "remote_root": "",
+  "service_name": "",
+  "test_url": "",
+  "remember_passwords": true,
+  "auto_open_url": true,
+  "stop_start_service": true,
+  "ignore_names": "",
+  "password": "",
+  "sudo_password": ""
+}
