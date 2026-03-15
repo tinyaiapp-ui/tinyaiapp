@@ -49,6 +49,10 @@
     <section class="hero">
       <h1>🎬 Oscar Picks 2026</h1>
       <p class="sub">Pick a category + nominee and send approximately <strong>€1 worth</strong> of the token per entry.</p>
+      <p class="hint" style="margin-top:10px">
+        Official token mint: <code id="mintText">7dMm1kkytxMqZZHMk4pzUT3GqsrkFJEoz2w9uYH4pump</code>
+        <button id="copyMintBtn" style="margin-left:8px;vertical-align:middle;">Copy mint</button>
+      </p>
       <div style="margin-top:14px;display:flex;justify-content:center;">
         <img src="./assets/oscar-banner.png" alt="Oscar visual" style="max-width:100%;width:min(640px,100%);border-radius:14px;border:1px solid var(--line);box-shadow:0 8px 30px rgba(0,0,0,.35);" />
       </div>
@@ -105,6 +109,7 @@
     const app = document.getElementById('app');
     const amountChip = document.getElementById('amountChip');
     const rateInfo = document.getElementById('rateInfo');
+    const copyMintBtn = document.getElementById('copyMintBtn');
 
     let tokenAmount = 1;
 
@@ -222,6 +227,15 @@
 
     // Render immediately so QR is always visible, then refresh with live DEX estimate.
     render();
+    copyMintBtn?.addEventListener('click', async () => {
+      const ok = await copyToClipboard(TOKEN_MINT);
+      if(ok){
+        copyMintBtn.textContent = 'Copied!';
+        copyMintBtn.classList.add('success');
+        setTimeout(() => { copyMintBtn.textContent = 'Copy mint'; copyMintBtn.classList.remove('success'); }, 1200);
+      }
+    });
+
     (async () => {
       await loadEurBasedAmount();
       render();
