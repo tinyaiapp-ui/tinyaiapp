@@ -210,6 +210,8 @@
       });
     }
 
+    // Render immediately so QR is always visible, then refresh with live DEX estimate.
+    render();
     (async () => {
       await loadEurBasedAmount();
       render();
