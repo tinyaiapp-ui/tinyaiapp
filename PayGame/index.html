@@ -68,13 +68,20 @@
       <div class="card qr" id="qrCard">
         <h3 style="margin-top:0;color:var(--acc)">Entry QR</h3>
         <img id="qrImg" alt="Entry QR" />
-        <div style="margin-top:8px"><button id="copyLink">Copy pay link</button></div>
+        <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+          <button id="copyLink">Copy pay link</button>
+          <a id="openPayLink" href="#" target="_blank" rel="noopener" style="text-decoration:none"><button type="button">Open pay link</button></a>
+        </div>
         <p class="muted" style="font-size:.82rem">If wallet doesn’t open Solana Pay, copy wallet and send manually with the same memo.</p>
       </div>
 
       <div class="card hidden" id="closedCard">
         <h3 style="margin-top:0;color:var(--warn)">Round closed</h3>
         <p class="muted">This round is closed. New entries are disabled.</p>
+      </div>
+
+      <div class="card" style="margin-top:14px;grid-column:1 / -1;">
+        <strong>Important:</strong> entry must include the memo shown above. Plain manual transfer without memo may not count.
       </div>
     </div>
   </div>
@@ -249,6 +256,7 @@
       document.getElementById('closesAt').textContent = new Date(currentCloseMs).toLocaleString();
       document.getElementById('memoFmt').textContent = currentMemo;
       document.getElementById('qrImg').src = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(payUrl)}`;
+      document.getElementById('openPayLink').href = payUrl;
       document.getElementById('statusTag').textContent = 'OPEN';
       document.getElementById('statusTag').classList.remove('closed');
       document.getElementById('qrCard').classList.remove('hidden');
