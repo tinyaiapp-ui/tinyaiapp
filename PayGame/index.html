@@ -324,6 +324,22 @@
       return { tx, connection, lastValidBlockHeight };
     }
 
+    function describeError(e){
+      if(!e) return 'unknown error';
+      if(typeof e === 'string') return e;
+      const parts = [];
+      if(e.message) parts.push(e.message);
+      if(e.code !== undefined) parts.push(`code=${e.code}`);
+      if(e.reason) parts.push(`reason=${e.reason}`);
+      if(e?.error?.message) parts.push(e.error.message);
+      if(e?.data?.message) parts.push(e.data.message);
+      if(Array.isArray(e?.data?.logs) && e.data.logs.length) parts.push(`logs: ${e.data.logs.slice(-2).join(' | ')}`);
+      if(!parts.length){
+        try { parts.push(JSON.stringify(e)); } catch {}
+      }
+      return parts.filter(Boolean).join(' | ') || 'unknown error';
+    }
+
     async function payWithConnectedWallet(){
       const payBtn = document.getElementById('payNow');
       const original = payBtn.textContent;
@@ -349,7 +365,7 @@
 
         setWalletStatus(`Paid ✅ ${shortAddr(connectedPubkey)} | tx: ${shortAddr(signature)} | RPC: ${activeRpcUrl}`);
       } catch (e) {
-        const msg = `Payment failed: ${e?.message || 'unknown error'}`;
+        const msg = `Payment failed: ${describeError(e)}`;
         setWalletStatus(msg);
         alert(msg);
         console.error('PayGame payment error', e);
