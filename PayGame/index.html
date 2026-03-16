@@ -59,9 +59,9 @@
         </div>
 
         <div class="card" style="margin-top:14px;">
-          <h3 style="margin-top:0;color:var(--acc)">Leaderboard (placeholder)</h3>
-          <ul class="leaderboard" id="leaderboard" style="list-style:none;padding:0;margin:0"></ul>
-          <p class="muted" style="font-size:.84rem;margin-top:10px">This is placeholder data now. Later your backend can update this live from wallet entries.</p>
+          <h3 style="margin-top:0;color:var(--acc)">Previous Round Entries</h3>
+          <ul class="leaderboard" id="leaderboard" style="list-style:none;padding:0;margin:0"><li><span>Waiting for previous round data…</span><strong>-</strong></li></ul>
+          <p class="muted" style="font-size:.84rem;margin-top:10px">Newest payment is shown first. Top row is the winner of the previous round.</p>
         </div>
       </div>
 
@@ -82,20 +82,15 @@
   <script>
     const RECIPIENT_WALLET = '8mLuYNT2FFx1cBhGPhDL6ddhg7C93r4VrJziBm6aEdmJ';
     const TOKEN_MINT = '7dMm1kkytxMqZZHMk4pzUT3GqsrkFJEoz2w9uYH4pump';
-    const ROUND_ID = 'ROUND_001';
+    const ROUND_ID = 'ROUND';
     const ENTRY_AMOUNT_TOKEN = 1;
-
-    // Live schedule: rounds close on real clock every 5 minutes (:00, :05, :10...).
     const ROUND_STEP_MINUTES = 5;
+    const RPC_URL = 'https://api.mainnet-beta.solana.com';
 
-    // Placeholder leaderboard
-    const LEADERBOARD = [
-      { wallet: '9V...8af', entries: 7 },
-      { wallet: '4L...Qk1', entries: 5 },
-      { wallet: 'DA...m2x', entries: 4 },
-      { wallet: 'Xx...91p', entries: 3 },
-      { wallet: 'H7...rTe', entries: 2 }
-    ];
+    let currentCloseMs = nextRoundCloseMs(ROUND_STEP_MINUTES);
+    let payUrl = '';
+    let currentMemo = '';
+    let lastLoadedPreviousRoundCloseMs = null;
 
     function nextRoundCloseMs(stepMinutes){
       const now = new Date();
@@ -112,18 +107,123 @@
       return t.getTime();
     }
 
-    const closeAtMs = nextRoundCloseMs(ROUND_STEP_MINUTES);
-    const roundStamp = new Date(closeAtMs).toISOString().replace(/[-:]/g,'').slice(0,13);
-    const memo = `PAYGAME|${ROUND_ID}_${roundStamp}|ENTRY`;
+    function roundStamp(closeMs){
+      const d = new Date(closeMs);
+      const y = d.getFullYear();
+      const mo = String(d.getMonth()+1).padStart(2,'0');
+      const da = String(d.getDate()).padStart(2,'0');
+      const h = String(d.getHours()).padStart(2,'0');
+      const mi = String(d.getMinutes()).padStart(2,'0');
+      return `${y}${mo}${da}${h}${mi}`;
+    }
 
-    function buildPayUrl(){
+    function memoForClose(closeMs){
+      return `PAYGAME|${ROUND_ID}_${roundStamp(closeMs)}|ENTRY`;
+    }
+
+    function buildPayUrl(closeMs){
+      const memo = memoForClose(closeMs);
       const u = new URL(`solana:${RECIPIENT_WALLET}`);
       u.searchParams.set('amount', String(ENTRY_AMOUNT_TOKEN));
       u.searchParams.set('spl-token', TOKEN_MINT);
       u.searchParams.set('label', 'PayGame Entry');
-      u.searchParams.set('message', `PayGame ${ROUND_ID} entry`);
+      u.searchParams.set('message', `PayGame entry closes ${new Date(closeMs).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`);
       u.searchParams.set('memo', memo);
-      return u.toString();
+      return { url: u.toString(), memo };
+    }
+
+    async function rpc(method, params){
+      const res = await fetch(RPC_URL, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ jsonrpc:'2.0', id:1, method, params })
+      });
+      const j = await res.json();
+      if(j.error) throw new Error(j.error.message || 'RPC error');
+      return j.result;
+    }
+
+    function tokenReceivedByRecipient(tx){
+      const pre = tx?.meta?.preTokenBalances || [];
+      const post = tx?.meta?.postTokenBalances || [];
+      const key = (x) => `${x.accountIndex}|${x.owner}|${x.mint}`;
+      const map = new Map();
+
+      pre.forEach(p => map.set(key(p), -Number(p.uiTokenAmount?.uiAmount || 0)));
+      post.forEach(p => map.set(key(p), (map.get(key(p)) || 0) + Number(p.uiTokenAmount?.uiAmount || 0)));
+
+      let delta = 0;
+      for (const [k, v] of map.entries()) {
+        if(k.includes(`|${RECIPIENT_WALLET}|${TOKEN_MINT}`)) delta += v;
+      }
+      return delta;
+    }
+
+    function extractMemo(tx){
+      const ixs = tx?.transaction?.message?.instructions || [];
+      for(const ix of ixs){
+        if(ix?.program === 'spl-memo'){
+          if(typeof ix.parsed === 'string') return ix.parsed;
+          if(typeof ix.parsed?.memo === 'string') return ix.parsed.memo;
+        }
+      }
+      return '';
+    }
+
+    function extractSender(tx){
+      const keys = tx?.transaction?.message?.accountKeys || [];
+      const signer = keys.find(k => k.signer && k.pubkey !== RECIPIENT_WALLET);
+      return signer?.pubkey || keys?.[0]?.pubkey || 'unknown';
+    }
+
+    function shortAddr(a){ return a ? `${a.slice(0,4)}...${a.slice(-4)}` : 'unknown'; }
+
+    async function loadPreviousRoundEntries(previousCloseMs){
+      const previousStartMs = previousCloseMs - ROUND_STEP_MINUTES * 60 * 1000;
+      const targetMemo = memoForClose(previousCloseMs);
+      const ul = document.getElementById('leaderboard');
+      ul.innerHTML = `<li><span>Loading last round…</span><strong>...</strong></li>`;
+
+      try {
+        const sigs = await rpc('getSignaturesForAddress', [RECIPIENT_WALLET, { limit: 80 }]);
+        const roundSigs = sigs.filter(s => {
+          const t = (s.blockTime || 0) * 1000;
+          return t >= previousStartMs - 15000 && t <= previousCloseMs + 15000;
+        }).map(s => s.signature);
+
+        if(!roundSigs.length){
+          ul.innerHTML = `<li><span>No entries in previous round</span><strong>-</strong></li>`;
+          return;
+        }
+
+        const txs = await Promise.all(roundSigs.map(sig => rpc('getTransaction', [sig, { encoding:'jsonParsed', maxSupportedTransactionVersion:0 }]).catch(() => null)));
+        const entries = txs.map(tx => {
+          if(!tx) return null;
+          const amt = tokenReceivedByRecipient(tx);
+          const memo = extractMemo(tx);
+          if(amt <= 0 || memo !== targetMemo) return null;
+          const timeMs = (tx.blockTime || 0) * 1000;
+          return {
+            sender: extractSender(tx),
+            amount: amt,
+            timeMs,
+            sig: tx.transaction?.signatures?.[0] || ''
+          };
+        }).filter(Boolean).sort((a,b) => b.timeMs - a.timeMs);
+
+        if(!entries.length){
+          ul.innerHTML = `<li><span>No valid entries in previous round</span><strong>-</strong></li>`;
+          return;
+        }
+
+        ul.innerHTML = entries.slice(0, 12).map((e, i) => {
+          const t = new Date(e.timeMs).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+          const winner = i === 0 ? ' 🏆 winner' : '';
+          return `<li><span>${shortAddr(e.sender)}${winner}</span><strong>${t}</strong></li>`;
+        }).join('');
+      } catch (err) {
+        ul.innerHTML = `<li><span>Could not load previous round yet</span><strong>RPC</strong></li>`;
+      }
     }
 
     async function copy(text){
@@ -139,42 +239,43 @@
       return `${h}:${m}:${s}`;
     }
 
-    function setClosedUI(closed){
-      const statusTag = document.getElementById('statusTag');
-      const qrCard = document.getElementById('qrCard');
-      const closedCard = document.getElementById('closedCard');
+    function refreshRoundUI(){
+      const built = buildPayUrl(currentCloseMs);
+      payUrl = built.url;
+      currentMemo = built.memo;
 
-      if(closed){
-        statusTag.textContent = 'CLOSED';
-        statusTag.classList.add('closed');
-        qrCard.classList.add('hidden');
-        closedCard.classList.remove('hidden');
-      } else {
-        statusTag.textContent = 'OPEN';
-        statusTag.classList.remove('closed');
-        qrCard.classList.remove('hidden');
-        closedCard.classList.add('hidden');
-      }
+      const closeLabel = new Date(currentCloseMs).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+      document.getElementById('roundId').textContent = `${ROUND_ID} (closes ${closeLabel})`;
+      document.getElementById('closesAt').textContent = new Date(currentCloseMs).toLocaleString();
+      document.getElementById('memoFmt').textContent = currentMemo;
+      document.getElementById('qrImg').src = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(payUrl)}`;
+      document.getElementById('statusTag').textContent = 'OPEN';
+      document.getElementById('statusTag').classList.remove('closed');
+      document.getElementById('qrCard').classList.remove('hidden');
+      document.getElementById('closedCard').classList.add('hidden');
     }
 
     function tickCountdown(){
       const now = Date.now();
-      const left = closeAtMs - now;
+      const left = currentCloseMs - now;
       document.getElementById('countdown').textContent = formatMs(left);
-      setClosedUI(left <= 0);
-    }
 
-    function renderLeaderboard(){
-      const ul = document.getElementById('leaderboard');
-      ul.innerHTML = LEADERBOARD.map((x, i) => `<li><span>#${i+1} ${x.wallet}</span><strong>${x.entries} entries</strong></li>`).join('');
-    }
+      if(left <= 0){
+        document.getElementById('statusTag').textContent = 'CLOSED';
+        document.getElementById('statusTag').classList.add('closed');
+        document.getElementById('qrCard').classList.add('hidden');
+        document.getElementById('closedCard').classList.remove('hidden');
 
-    const payUrl = buildPayUrl();
-    document.getElementById('memoFmt').textContent = memo;
-    const closeLabel = new Date(closeAtMs).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-    document.getElementById('roundId').textContent = `${ROUND_ID} (closes ${closeLabel})`;
-    document.getElementById('closesAt').textContent = new Date(closeAtMs).toLocaleString();
-    document.getElementById('qrImg').src = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(payUrl)}`;
+        const previousClose = currentCloseMs;
+        if(lastLoadedPreviousRoundCloseMs !== previousClose){
+          lastLoadedPreviousRoundCloseMs = previousClose;
+          loadPreviousRoundEntries(previousClose);
+        }
+
+        currentCloseMs += ROUND_STEP_MINUTES * 60 * 1000;
+        setTimeout(refreshRoundUI, 1200);
+      }
+    }
 
     document.getElementById('copyLink').onclick = async () => {
       if(await copy(payUrl)){ const b = document.getElementById('copyLink'); b.textContent='Copied!'; setTimeout(()=>b.textContent='Copy pay link',1200); }
@@ -186,7 +287,7 @@
       if(await copy(RECIPIENT_WALLET)){ const b = document.getElementById('copyWallet'); b.textContent='Copied!'; setTimeout(()=>b.textContent='Copy wallet',1200); }
     };
 
-    renderLeaderboard();
+    refreshRoundUI();
     tickCountdown();
     setInterval(tickCountdown, 1000);
   </script>
