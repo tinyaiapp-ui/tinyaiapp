@@ -104,6 +104,7 @@
       'https://rpc.ankr.com/solana'
     ];
     const TOKEN_PROGRAM_ID = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
+    const TOKEN_2022_PROGRAM_ID = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb';
     const ASSOCIATED_TOKEN_PROGRAM_ID = 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL';
     const MEMO_PROGRAM_ID = 'MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr';
 
@@ -233,9 +234,16 @@
       const owner = new web3.PublicKey(connectedPubkey);
       const recipient = new web3.PublicKey(RECIPIENT_WALLET);
       const mint = new web3.PublicKey(TOKEN_MINT);
-      const tokenProgram = new web3.PublicKey(TOKEN_PROGRAM_ID);
       const ataProgram = new web3.PublicKey(ASSOCIATED_TOKEN_PROGRAM_ID);
       const memoProgram = new web3.PublicKey(MEMO_PROGRAM_ID);
+
+      const mintAccountInfo = await connection.getAccountInfo(mint);
+      if(!mintAccountInfo) throw new Error('Mint account not found');
+      const mintOwnerProgram = mintAccountInfo.owner?.toBase58?.() || '';
+      if(mintOwnerProgram !== TOKEN_PROGRAM_ID && mintOwnerProgram !== TOKEN_2022_PROGRAM_ID){
+        throw new Error(`Unsupported mint owner program: ${mintOwnerProgram}`);
+      }
+      const tokenProgram = new web3.PublicKey(mintOwnerProgram);
 
       const mintInfo = await connection.getParsedAccountInfo(mint);
       const decimals = mintInfo?.value?.data?.parsed?.info?.decimals;
