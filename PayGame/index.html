@@ -85,9 +85,8 @@
     const ROUND_ID = 'ROUND_001';
     const ENTRY_AMOUNT_TOKEN = 1;
 
-    // Set close time in CET/CEST by using ISO with timezone offset.
-    // Example: 2026-03-16T03:30:00+01:00
-    const ROUND_CLOSE_ISO = '2026-03-16T03:30:00+01:00';
+    // Quick test mode: round closes 5 minutes after page load.
+    const TEST_DURATION_MINUTES = 5;
 
     // Placeholder leaderboard
     const LEADERBOARD = [
@@ -98,7 +97,7 @@
       { wallet: 'H7...rTe', entries: 2 }
     ];
 
-    const closeAtMs = new Date(ROUND_CLOSE_ISO).getTime();
+    const closeAtMs = Date.now() + TEST_DURATION_MINUTES * 60 * 1000;
     const memo = `PAYGAME|${ROUND_ID}|ENTRY`;
 
     function buildPayUrl(){
