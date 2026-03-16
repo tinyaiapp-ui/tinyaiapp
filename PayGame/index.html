@@ -98,7 +98,11 @@
     const TARGET_USD = 1;
     const ENTRY_AMOUNT_TOKEN_FALLBACK = 1;
     const ROUND_STEP_MINUTES = 5;
-    const RPC_URL = 'https://api.mainnet-beta.solana.com';
+    const RPC_URLS = [
+      'https://api.mainnet-beta.solana.com',
+      'https://solana-rpc.publicnode.com',
+      'https://rpc.ankr.com/solana'
+    ];
     const TOKEN_PROGRAM_ID = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
     const ASSOCIATED_TOKEN_PROGRAM_ID = 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL';
     const MEMO_PROGRAM_ID = 'MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr';
@@ -110,6 +114,7 @@
     let lastLoadedPreviousRoundCloseMs = null;
     let connectedProvider = null;
     let connectedPubkey = '';
+    let activeRpcUrl = RPC_URLS[0];
 
     function nextRoundCloseMs(stepMinutes){
       const now = new Date();
@@ -208,7 +213,20 @@
       if(!window.solanaWeb3) throw new Error('solanaWeb3 not loaded');
 
       const web3 = window.solanaWeb3;
-      const connection = new web3.Connection(RPC_URL, 'confirmed');
+
+      let connection = null;
+      let pickedRpc = null;
+      for(const url of RPC_URLS){
+        try {
+          const c = new web3.Connection(url, 'confirmed');
+          await c.getLatestBlockhash('confirmed');
+          connection = c;
+          pickedRpc = url;
+          break;
+        } catch {}
+      }
+      if(!connection) throw new Error('No reachable RPC endpoint');
+      activeRpcUrl = pickedRpc || activeRpcUrl;
       const owner = new web3.PublicKey(connectedPubkey);
       const recipient = new web3.PublicKey(RECIPIENT_WALLET);
       const mint = new web3.PublicKey(TOKEN_MINT);
@@ -310,7 +328,7 @@
           lastValidBlockHeight,
         }, 'confirmed');
 
-        setWalletStatus(`Paid ✅ ${shortAddr(connectedPubkey)} | tx: ${shortAddr(signature)}`);
+        setWalletStatus(`Paid ✅ ${shortAddr(connectedPubkey)} | tx: ${shortAddr(signature)} | RPC: ${activeRpcUrl}`);
       } catch (e) {
         setWalletStatus(`Payment failed: ${e?.message || 'unknown error'}`);
       } finally {
@@ -320,14 +338,24 @@
     }
 
     async function rpc(method, params){
-      const res = await fetch(RPC_URL, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ jsonrpc:'2.0', id:1, method, params })
-      });
-      const j = await res.json();
-      if(j.error) throw new Error(j.error.message || 'RPC error');
-      return j.result;
+      let lastErr = null;
+      for(const url of RPC_URLS){
+        try {
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ jsonrpc:'2.0', id:1, method, params })
+          });
+          if(!res.ok) throw new Error(`HTTP ${res.status}`);
+          const j = await res.json();
+          if(j.error) throw new Error(j.error.message || 'RPC error');
+          activeRpcUrl = url;
+          return j.result;
+        } catch (e) {
+          lastErr = e;
+        }
+      }
+      throw lastErr || new Error('All RPC endpoints failed');
     }
 
     function tokenReceivedByRecipient(tx){
