@@ -85,8 +85,8 @@
     const ROUND_ID = 'ROUND_001';
     const ENTRY_AMOUNT_TOKEN = 1;
 
-    // Quick test mode: round closes 5 minutes after page load.
-    const TEST_DURATION_MINUTES = 5;
+    // Live schedule: rounds close on real clock every 5 minutes (:00, :05, :10...).
+    const ROUND_STEP_MINUTES = 5;
 
     // Placeholder leaderboard
     const LEADERBOARD = [
@@ -97,8 +97,24 @@
       { wallet: 'H7...rTe', entries: 2 }
     ];
 
-    const closeAtMs = Date.now() + TEST_DURATION_MINUTES * 60 * 1000;
-    const memo = `PAYGAME|${ROUND_ID}|ENTRY`;
+    function nextRoundCloseMs(stepMinutes){
+      const now = new Date();
+      const t = new Date(now);
+      t.setSeconds(0, 0);
+      const m = t.getMinutes();
+      const nextMin = Math.ceil((m + 1) / stepMinutes) * stepMinutes;
+      if(nextMin >= 60){
+        t.setHours(t.getHours() + 1);
+        t.setMinutes(0, 0, 0);
+      } else {
+        t.setMinutes(nextMin, 0, 0);
+      }
+      return t.getTime();
+    }
+
+    const closeAtMs = nextRoundCloseMs(ROUND_STEP_MINUTES);
+    const roundStamp = new Date(closeAtMs).toISOString().replace(/[-:]/g,'').slice(0,13);
+    const memo = `PAYGAME|${ROUND_ID}_${roundStamp}|ENTRY`;
 
     function buildPayUrl(){
       const u = new URL(`solana:${RECIPIENT_WALLET}`);
@@ -155,7 +171,8 @@
 
     const payUrl = buildPayUrl();
     document.getElementById('memoFmt').textContent = memo;
-    document.getElementById('roundId').textContent = ROUND_ID;
+    const closeLabel = new Date(closeAtMs).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+    document.getElementById('roundId').textContent = `${ROUND_ID} (closes ${closeLabel})`;
     document.getElementById('closesAt').textContent = new Date(closeAtMs).toLocaleString();
     document.getElementById('qrImg').src = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(payUrl)}`;
 
