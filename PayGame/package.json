@@ -1,0 +1,8 @@
+{
+  "name": "paygame",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "npx --yes http-server . -p 5500 -c-1"
+  }
+}
