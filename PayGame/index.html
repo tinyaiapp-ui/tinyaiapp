@@ -30,7 +30,7 @@
   <div class="wrap">
     <div class="card">
       <h1>🔥 PayGame — Last Entry Wins</h1>
-      <div class="muted">Send ~€1 in token per entry. Last valid payment before timer ends wins the pool.</div>
+      <div class="muted">Send ~$1 in token per entry. Last valid payment before timer ends wins the pool.</div>
       <p class="muted" style="margin:10px 0 0">Official mint: <code>7dMm1kkytxMqZZHMk4pzUT3GqsrkFJEoz2w9uYH4pump</code> <button id="copyMint">Copy mint</button></p>
       <p class="muted">Game wallet: <code>8mLuYNT2FFx1cBhGPhDL6ddhg7C93r4VrJziBm6aEdmJ</code> <button id="copyWallet">Copy wallet</button></p>
     </div>
@@ -43,7 +43,7 @@
             <div><strong>Round ID:</strong> <code id="roundId">ROUND_001</code></div>
             <div style="margin-top:6px"><strong>Closes at:</strong> <span id="closesAt">-</span></div>
             <div style="margin-top:6px"><strong>Time left:</strong> <div class="timer" id="countdown">--:--:--</div></div>
-            <div style="margin-top:6px"><strong>Entry target:</strong> ~€1 in token</div>
+            <div style="margin-top:6px"><strong>Entry target:</strong> <span id="entryTarget">~$1 in token</span></div>
             <div style="margin-top:8px" class="tag" id="statusTag">OPEN</div>
           </div>
 
@@ -70,7 +70,7 @@
         <img id="qrImg" alt="Entry QR" />
         <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
           <button id="copyLink">Copy pay link</button>
-          <a id="openPayLink" href="#" target="_blank" rel="noopener" style="text-decoration:none"><button type="button">Open pay link</button></a>
+          <a id="openPayLink" href="#" style="text-decoration:none"><button type="button">Open pay link</button></a>
         </div>
         <p class="muted" style="font-size:.82rem">If wallet doesn’t open Solana Pay, copy wallet and send manually with the same memo.</p>
       </div>
@@ -90,13 +90,15 @@
     const RECIPIENT_WALLET = '8mLuYNT2FFx1cBhGPhDL6ddhg7C93r4VrJziBm6aEdmJ';
     const TOKEN_MINT = '7dMm1kkytxMqZZHMk4pzUT3GqsrkFJEoz2w9uYH4pump';
     const ROUND_ID = 'ROUND';
-    const ENTRY_AMOUNT_TOKEN = 1;
+    const TARGET_USD = 1;
+    const ENTRY_AMOUNT_TOKEN_FALLBACK = 1;
     const ROUND_STEP_MINUTES = 5;
     const RPC_URL = 'https://api.mainnet-beta.solana.com';
 
     let currentCloseMs = nextRoundCloseMs(ROUND_STEP_MINUTES);
     let payUrl = '';
     let currentMemo = '';
+    let currentEntryAmountToken = ENTRY_AMOUNT_TOKEN_FALLBACK;
     let lastLoadedPreviousRoundCloseMs = null;
 
     function nextRoundCloseMs(stepMinutes){
@@ -128,15 +130,35 @@
       return `PAYGAME|${ROUND_ID}_${roundStamp(closeMs)}|ENTRY`;
     }
 
-    function buildPayUrl(closeMs){
+    function buildPayUrl(closeMs, amountToken){
       const memo = memoForClose(closeMs);
       const u = new URL(`solana:${RECIPIENT_WALLET}`);
-      u.searchParams.set('amount', String(ENTRY_AMOUNT_TOKEN));
+      u.searchParams.set('amount', String(amountToken));
       u.searchParams.set('spl-token', TOKEN_MINT);
       u.searchParams.set('label', 'PayGame Entry');
       u.searchParams.set('message', `PayGame entry closes ${new Date(closeMs).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`);
       u.searchParams.set('memo', memo);
       return { url: u.toString(), memo };
+    }
+
+    async function fetchTokenPriceUsd(mint){
+      try {
+        const url = `https://api.jup.ag/price/v2?ids=${encodeURIComponent(mint)}`;
+        const res = await fetch(url, { cache:'no-store' });
+        if(!res.ok) throw new Error('price fetch failed');
+        const json = await res.json();
+        const p = Number(json?.data?.[mint]?.price);
+        if(!Number.isFinite(p) || p <= 0) throw new Error('bad price');
+        return p;
+      } catch {
+        return null;
+      }
+    }
+
+    async function computeEntryAmountToken(){
+      const price = await fetchTokenPriceUsd(TOKEN_MINT);
+      if(!price) return ENTRY_AMOUNT_TOKEN_FALLBACK;
+      return Number((TARGET_USD / price).toFixed(6));
     }
 
     async function rpc(method, params){
@@ -246,8 +268,9 @@
       return `${h}:${m}:${s}`;
     }
 
-    function refreshRoundUI(){
-      const built = buildPayUrl(currentCloseMs);
+    async function refreshRoundUI(){
+      currentEntryAmountToken = await computeEntryAmountToken();
+      const built = buildPayUrl(currentCloseMs, currentEntryAmountToken);
       payUrl = built.url;
       currentMemo = built.memo;
 
@@ -255,6 +278,7 @@
       document.getElementById('roundId').textContent = `${ROUND_ID} (closes ${closeLabel})`;
       document.getElementById('closesAt').textContent = new Date(currentCloseMs).toLocaleString();
       document.getElementById('memoFmt').textContent = currentMemo;
+      document.getElementById('entryTarget').textContent = `~$${TARGET_USD} in token (${currentEntryAmountToken})`;
       document.getElementById('qrImg').src = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(payUrl)}`;
       document.getElementById('openPayLink').href = payUrl;
       document.getElementById('statusTag').textContent = 'OPEN';
@@ -287,6 +311,10 @@
 
     document.getElementById('copyLink').onclick = async () => {
       if(await copy(payUrl)){ const b = document.getElementById('copyLink'); b.textContent='Copied!'; setTimeout(()=>b.textContent='Copy pay link',1200); }
+    };
+    document.getElementById('openPayLink').onclick = (e) => {
+      e.preventDefault();
+      if(payUrl) window.location.href = payUrl;
     };
     document.getElementById('copyMint').onclick = async () => {
       if(await copy(TOKEN_MINT)){ const b = document.getElementById('copyMint'); b.textContent='Copied!'; setTimeout(()=>b.textContent='Copy mint',1200); }
