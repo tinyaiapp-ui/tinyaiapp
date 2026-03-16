@@ -352,8 +352,19 @@
         }
         const { tx, connection, lastValidBlockHeight } = await createEntryTokenTx();
         payBtn.textContent = 'Awaiting wallet approval...';
-        const sigResp = await connectedProvider.signAndSendTransaction(tx);
-        const signature = typeof sigResp === 'string' ? sigResp : sigResp?.signature;
+
+        // Izbjegni wallet-ov interni send path (može vraćati 403).
+        // Potpiši u walletu, a pošalji preko našeg RPC fallback connectiona.
+        const signedTx = await connectedProvider.signTransaction(tx);
+        if(!signedTx) throw new Error('Wallet did not return signed transaction');
+
+        payBtn.textContent = 'Sending via RPC...';
+        const raw = signedTx.serialize();
+        const signature = await connection.sendRawTransaction(raw, {
+          skipPreflight: false,
+          preflightCommitment: 'confirmed',
+          maxRetries: 5,
+        });
         if(!signature) throw new Error('No signature returned');
 
         payBtn.textContent = 'Confirming...';
