@@ -256,10 +256,6 @@
         [owner.toBuffer(), tokenProgram.toBuffer(), mint.toBuffer()],
         ataProgram
       );
-      const [destAta] = web3.PublicKey.findProgramAddressSync(
-        [recipient.toBuffer(), tokenProgram.toBuffer(), mint.toBuffer()],
-        ataProgram
-      );
 
       // Ne pretpostavljaj ATA: wallet može držati mint na običnom token accountu.
       let sourceTokenAccount = null;
@@ -280,24 +276,12 @@
 
       if(!sourceTokenAccount) throw new Error('No token account with balance found for this mint');
 
-      const tx = new web3.Transaction();
+      // Za receiver koristi postojeći token account (bez ATA create u runtime-u, zbog program mismatch edge-caseova).
+      const recipientTokenAccounts = await connection.getParsedTokenAccountsByOwner(recipient, { mint });
+      const destAta = recipientTokenAccounts?.value?.[0]?.pubkey;
+      if(!destAta) throw new Error('Game wallet has no token account for this mint (create it once, then retry)');
 
-      const destInfo = await connection.getAccountInfo(destAta);
-      if(!destInfo){
-        tx.add(new web3.TransactionInstruction({
-          programId: ataProgram,
-          keys: [
-            { pubkey: owner, isSigner: true, isWritable: true },
-            { pubkey: destAta, isSigner: false, isWritable: true },
-            { pubkey: recipient, isSigner: false, isWritable: false },
-            { pubkey: mint, isSigner: false, isWritable: false },
-            { pubkey: web3.SystemProgram.programId, isSigner: false, isWritable: false },
-            { pubkey: tokenProgram, isSigner: false, isWritable: false },
-            { pubkey: web3.SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false },
-          ],
-          data: new Uint8Array(),
-        }));
-      }
+      const tx = new web3.Transaction();
 
       const memoData = new TextEncoder().encode(currentMemo);
       tx.add(new web3.TransactionInstruction({
