@@ -241,7 +241,7 @@
       const amountRaw = BigInt(Math.round(currentEntryAmountToken * Math.pow(10, decimals)));
       if(amountRaw <= 0n) throw new Error('Amount too small');
 
-      const [sourceAta] = web3.PublicKey.findProgramAddressSync(
+      const [ownerAta] = web3.PublicKey.findProgramAddressSync(
         [owner.toBuffer(), tokenProgram.toBuffer(), mint.toBuffer()],
         ataProgram
       );
@@ -250,8 +250,24 @@
         ataProgram
       );
 
-      const sourceInfo = await connection.getAccountInfo(sourceAta);
-      if(!sourceInfo) throw new Error('No token balance account in wallet for this mint');
+      // Ne pretpostavljaj ATA: wallet može držati mint na običnom token accountu.
+      let sourceTokenAccount = null;
+      const parsedTokenAccounts = await connection.getParsedTokenAccountsByOwner(owner, { mint });
+      let bestUiAmount = 0;
+      for(const item of (parsedTokenAccounts?.value || [])){
+        const uiAmt = Number(item?.account?.data?.parsed?.info?.tokenAmount?.uiAmount || 0);
+        if(uiAmt > bestUiAmount){
+          bestUiAmount = uiAmt;
+          sourceTokenAccount = item?.pubkey || sourceTokenAccount;
+        }
+      }
+
+      if(!sourceTokenAccount){
+        const sourceAtaInfo = await connection.getAccountInfo(ownerAta);
+        if(sourceAtaInfo) sourceTokenAccount = ownerAta;
+      }
+
+      if(!sourceTokenAccount) throw new Error('No token account with balance found for this mint');
 
       const tx = new web3.Transaction();
 
@@ -291,7 +307,7 @@
       tx.add(new web3.TransactionInstruction({
         programId: tokenProgram,
         keys: [
-          { pubkey: sourceAta, isSigner: false, isWritable: true },
+          { pubkey: sourceTokenAccount, isSigner: false, isWritable: true },
           { pubkey: mint, isSigner: false, isWritable: false },
           { pubkey: destAta, isSigner: false, isWritable: true },
           { pubkey: owner, isSigner: true, isWritable: false },
