@@ -172,8 +172,11 @@
 
     async function computeEntryAmountToken(){
       const price = await fetchTokenPriceUsd(TOKEN_MINT);
-      if(!price) return ENTRY_AMOUNT_TOKEN_FALLBACK;
-      return Number((TARGET_USD / price).toFixed(6));
+      // Ako nema cijene ili je token ekstremno jeftin, drži stabilan fallback.
+      if(!price || price < 0.000001) return ENTRY_AMOUNT_TOKEN_FALLBACK;
+      const amount = Number((TARGET_USD / price).toFixed(6));
+      if(!Number.isFinite(amount) || amount <= 0) return ENTRY_AMOUNT_TOKEN_FALLBACK;
+      return amount;
     }
 
     function detectProvider(){
@@ -346,7 +349,10 @@
 
         setWalletStatus(`Paid ✅ ${shortAddr(connectedPubkey)} | tx: ${shortAddr(signature)} | RPC: ${activeRpcUrl}`);
       } catch (e) {
-        setWalletStatus(`Payment failed: ${e?.message || 'unknown error'}`);
+        const msg = `Payment failed: ${e?.message || 'unknown error'}`;
+        setWalletStatus(msg);
+        alert(msg);
+        console.error('PayGame payment error', e);
       } finally {
         payBtn.disabled = false;
         payBtn.textContent = original;
