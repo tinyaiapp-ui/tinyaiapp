@@ -71,6 +71,7 @@
         <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
           <button id="copyLink">Copy pay link</button>
           <a id="openPayLink" href="#" style="text-decoration:none"><button type="button">Open pay link</button></a>
+          <button id="copyManual" type="button">Copy manual details</button>
         </div>
         <p class="muted" style="font-size:.82rem">If wallet doesn’t open Solana Pay, copy wallet and send manually with the same memo.</p>
       </div>
@@ -312,9 +313,30 @@
     document.getElementById('copyLink').onclick = async () => {
       if(await copy(payUrl)){ const b = document.getElementById('copyLink'); b.textContent='Copied!'; setTimeout(()=>b.textContent='Copy pay link',1200); }
     };
-    document.getElementById('openPayLink').onclick = (e) => {
-      e.preventDefault();
-      if(payUrl) window.location.href = payUrl;
+    document.getElementById('openPayLink').onclick = () => {
+      // ostavimo nativni <a href="solana:..."> flow; bez JS preusmjeravanja
+      setTimeout(() => {
+        // fallback hint ako browser ne handla custom protocol
+        const b = document.getElementById('openPayLink').querySelector('button');
+        if(b){
+          const old = b.textContent;
+          b.textContent = 'If nothing opened: check wallet protocol handler';
+          setTimeout(() => b.textContent = old, 2200);
+        }
+      }, 700);
+    };
+    document.getElementById('copyManual').onclick = async () => {
+      const text = [
+        `wallet: ${RECIPIENT_WALLET}`,
+        `mint: ${TOKEN_MINT}`,
+        `amount: ${currentEntryAmountToken}`,
+        `memo: ${currentMemo}`
+      ].join('\n');
+      if(await copy(text)){
+        const b = document.getElementById('copyManual');
+        b.textContent='Copied!';
+        setTimeout(()=>b.textContent='Copy manual details',1200);
+      }
     };
     document.getElementById('copyMint').onclick = async () => {
       if(await copy(TOKEN_MINT)){ const b = document.getElementById('copyMint'); b.textContent='Copied!'; setTimeout(()=>b.textContent='Copy mint',1200); }
