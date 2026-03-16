@@ -69,11 +69,14 @@
         <h3 style="margin-top:0;color:var(--acc)">Entry QR</h3>
         <img id="qrImg" alt="Entry QR" />
         <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+          <button id="connectWallet" type="button">Connect wallet</button>
+          <button id="payNow" type="button">Pay now (~$1)</button>
           <button id="copyLink">Copy pay link</button>
           <a id="openPayLink" href="#" style="text-decoration:none"><button type="button">Open pay link</button></a>
           <button id="copyManual" type="button">Copy manual details</button>
         </div>
-        <p class="muted" style="font-size:.82rem">If wallet doesn’t open Solana Pay, copy wallet and send manually with the same memo.</p>
+        <p class="muted" id="walletStatus" style="font-size:.82rem">Wallet: not connected</p>
+        <p class="muted" style="font-size:.82rem">If wallet connection fails, use Open pay link / manual fallback.</p>
       </div>
 
       <div class="card hidden" id="closedCard">
@@ -87,6 +90,7 @@
     </div>
   </div>
 
+  <script src="https://unpkg.com/@solana/web3.js@1.98.4/lib/index.iife.min.js"></script>
   <script>
     const RECIPIENT_WALLET = '8mLuYNT2FFx1cBhGPhDL6ddhg7C93r4VrJziBm6aEdmJ';
     const TOKEN_MINT = '7dMm1kkytxMqZZHMk4pzUT3GqsrkFJEoz2w9uYH4pump';
@@ -95,12 +99,17 @@
     const ENTRY_AMOUNT_TOKEN_FALLBACK = 1;
     const ROUND_STEP_MINUTES = 5;
     const RPC_URL = 'https://api.mainnet-beta.solana.com';
+    const TOKEN_PROGRAM_ID = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
+    const ASSOCIATED_TOKEN_PROGRAM_ID = 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL';
+    const MEMO_PROGRAM_ID = 'MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr';
 
     let currentCloseMs = nextRoundCloseMs(ROUND_STEP_MINUTES);
     let payUrl = '';
     let currentMemo = '';
     let currentEntryAmountToken = ENTRY_AMOUNT_TOKEN_FALLBACK;
     let lastLoadedPreviousRoundCloseMs = null;
+    let connectedProvider = null;
+    let connectedPubkey = '';
 
     function nextRoundCloseMs(stepMinutes){
       const now = new Date();
@@ -160,6 +169,154 @@
       const price = await fetchTokenPriceUsd(TOKEN_MINT);
       if(!price) return ENTRY_AMOUNT_TOKEN_FALLBACK;
       return Number((TARGET_USD / price).toFixed(6));
+    }
+
+    function detectProvider(){
+      if(window?.solflare?.isSolflare && window?.solflare?.connect) return window.solflare;
+      if(window?.solana?.isPhantom && window?.solana?.connect) return window.solana;
+      if(window?.phantom?.solana?.isPhantom) return window.phantom.solana;
+      return null;
+    }
+
+    function setWalletStatus(text){
+      const el = document.getElementById('walletStatus');
+      if(el) el.textContent = text;
+    }
+
+    async function connectWallet(){
+      const provider = detectProvider();
+      if(!provider){
+        setWalletStatus('Wallet extension not found. Install Solflare or Phantom.');
+        return false;
+      }
+      try {
+        const resp = await provider.connect();
+        const pk = resp?.publicKey?.toString?.() || provider?.publicKey?.toString?.();
+        if(!pk) throw new Error('No public key');
+        connectedProvider = provider;
+        connectedPubkey = pk;
+        setWalletStatus(`Wallet connected: ${shortAddr(pk)}`);
+        return true;
+      } catch (e) {
+        setWalletStatus('Wallet connect cancelled/failed.');
+        return false;
+      }
+    }
+
+    async function createEntryTokenTx(){
+      if(!connectedProvider || !connectedPubkey) throw new Error('Wallet not connected');
+      if(!window.solanaWeb3) throw new Error('solanaWeb3 not loaded');
+
+      const web3 = window.solanaWeb3;
+      const connection = new web3.Connection(RPC_URL, 'confirmed');
+      const owner = new web3.PublicKey(connectedPubkey);
+      const recipient = new web3.PublicKey(RECIPIENT_WALLET);
+      const mint = new web3.PublicKey(TOKEN_MINT);
+      const tokenProgram = new web3.PublicKey(TOKEN_PROGRAM_ID);
+      const ataProgram = new web3.PublicKey(ASSOCIATED_TOKEN_PROGRAM_ID);
+      const memoProgram = new web3.PublicKey(MEMO_PROGRAM_ID);
+
+      const mintInfo = await connection.getParsedAccountInfo(mint);
+      const decimals = mintInfo?.value?.data?.parsed?.info?.decimals;
+      if(!Number.isInteger(decimals)) throw new Error('Could not read token decimals');
+
+      const amountRaw = BigInt(Math.round(currentEntryAmountToken * Math.pow(10, decimals)));
+      if(amountRaw <= 0n) throw new Error('Amount too small');
+
+      const [sourceAta] = web3.PublicKey.findProgramAddressSync(
+        [owner.toBuffer(), tokenProgram.toBuffer(), mint.toBuffer()],
+        ataProgram
+      );
+      const [destAta] = web3.PublicKey.findProgramAddressSync(
+        [recipient.toBuffer(), tokenProgram.toBuffer(), mint.toBuffer()],
+        ataProgram
+      );
+
+      const sourceInfo = await connection.getAccountInfo(sourceAta);
+      if(!sourceInfo) throw new Error('No token balance account in wallet for this mint');
+
+      const tx = new web3.Transaction();
+
+      const destInfo = await connection.getAccountInfo(destAta);
+      if(!destInfo){
+        tx.add(new web3.TransactionInstruction({
+          programId: ataProgram,
+          keys: [
+            { pubkey: owner, isSigner: true, isWritable: true },
+            { pubkey: destAta, isSigner: false, isWritable: true },
+            { pubkey: recipient, isSigner: false, isWritable: false },
+            { pubkey: mint, isSigner: false, isWritable: false },
+            { pubkey: web3.SystemProgram.programId, isSigner: false, isWritable: false },
+            { pubkey: tokenProgram, isSigner: false, isWritable: false },
+            { pubkey: web3.SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false },
+          ],
+          data: new Uint8Array(),
+        }));
+      }
+
+      const memoData = new TextEncoder().encode(currentMemo);
+      tx.add(new web3.TransactionInstruction({
+        programId: memoProgram,
+        keys: [],
+        data: memoData,
+      }));
+
+      const transferData = new Uint8Array(10);
+      transferData[0] = 12;
+      let n = amountRaw;
+      for(let i = 0; i < 8; i++){
+        transferData[1 + i] = Number(n & 255n);
+        n >>= 8n;
+      }
+      transferData[9] = decimals;
+
+      tx.add(new web3.TransactionInstruction({
+        programId: tokenProgram,
+        keys: [
+          { pubkey: sourceAta, isSigner: false, isWritable: true },
+          { pubkey: mint, isSigner: false, isWritable: false },
+          { pubkey: destAta, isSigner: false, isWritable: true },
+          { pubkey: owner, isSigner: true, isWritable: false },
+        ],
+        data: transferData,
+      }));
+
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
+      tx.recentBlockhash = blockhash;
+      tx.feePayer = owner;
+      return { tx, connection, lastValidBlockHeight };
+    }
+
+    async function payWithConnectedWallet(){
+      const payBtn = document.getElementById('payNow');
+      const original = payBtn.textContent;
+      payBtn.disabled = true;
+      payBtn.textContent = 'Preparing tx...';
+      try {
+        if(!connectedProvider || !connectedPubkey){
+          const ok = await connectWallet();
+          if(!ok) return;
+        }
+        const { tx, connection, lastValidBlockHeight } = await createEntryTokenTx();
+        payBtn.textContent = 'Awaiting wallet approval...';
+        const sigResp = await connectedProvider.signAndSendTransaction(tx);
+        const signature = typeof sigResp === 'string' ? sigResp : sigResp?.signature;
+        if(!signature) throw new Error('No signature returned');
+
+        payBtn.textContent = 'Confirming...';
+        await connection.confirmTransaction({
+          signature,
+          blockhash: tx.recentBlockhash,
+          lastValidBlockHeight,
+        }, 'confirmed');
+
+        setWalletStatus(`Paid ✅ ${shortAddr(connectedPubkey)} | tx: ${shortAddr(signature)}`);
+      } catch (e) {
+        setWalletStatus(`Payment failed: ${e?.message || 'unknown error'}`);
+      } finally {
+        payBtn.disabled = false;
+        payBtn.textContent = original;
+      }
     }
 
     async function rpc(method, params){
@@ -310,6 +467,9 @@
       }
     }
 
+    document.getElementById('connectWallet').onclick = connectWallet;
+    document.getElementById('payNow').onclick = payWithConnectedWallet;
+
     document.getElementById('copyLink').onclick = async () => {
       if(await copy(payUrl)){ const b = document.getElementById('copyLink'); b.textContent='Copied!'; setTimeout(()=>b.textContent='Copy pay link',1200); }
     };
@@ -345,6 +505,7 @@
       if(await copy(RECIPIENT_WALLET)){ const b = document.getElementById('copyWallet'); b.textContent='Copied!'; setTimeout(()=>b.textContent='Copy wallet',1200); }
     };
 
+    if(detectProvider()) setWalletStatus('Wallet extension detected. Click Connect wallet.');
     refreshRoundUI();
     tickCountdown();
     setInterval(tickCountdown, 1000);
